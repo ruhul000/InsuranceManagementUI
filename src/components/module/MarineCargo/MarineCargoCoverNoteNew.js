@@ -9,6 +9,8 @@ import { useNavigate } from "react-router-dom";
 import Form from 'react-bootstrap/Form';
 import Select from 'react-select'
 import AsyncSelect from 'react-select/async';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 
 
@@ -18,6 +20,86 @@ import AsyncSelect from 'react-select/async';
 
 
 export default function MarineCargoCoverNoteNew() {
+
+    const [searchObj, setSearchObj] = useState(
+      {
+        Class_Name: 'Marine Cargo',
+        Sub_Class_Name: 'Cover Note',
+        BranchKey: 21,
+        DocCode: 0,
+        YearName: 0,
+
+      });
+
+    const handleSearch = (e)=>{
+      var keynum = e.keyCode||e.which;
+      if(keynum == 13) {
+        
+        axios.post(`${Constants.BASE_URL}/FinalMR/GetFinalMRByCodeBranchYear`,searchObj,auth)
+      .then(res=> {                     
+                        
+            if(res.data != null )
+            {              
+              setInput( res.data);
+              setInput( prevState=>({...prevState,'Action': 2}))
+              
+              //set client
+              axios.get(`${Constants.BASE_URL}/client/` + res.data.ClientKey,auth)
+              .then(cl=> {
+                setSelectedClient({                
+                  label:cl.data.ClientName,
+                  value:cl.data.ClientKey,
+                  address: cl.data.ClientAddress,
+                });
+
+                setclientaddress(cl.data.ClientAddress);
+                console.log(clientaddress);
+
+              })
+
+              
+              //set bank and branch value
+              axios.get(`${Constants.BASE_URL}/BankBranch/` + res.data.BankKey,auth)
+              .then(br=> {
+                setInput( prevState=>({...prevState,"BankId": br.data.BankId}));
+                
+                loadBankBranches(br.data.BankId);
+                setInput( prevState=>({...prevState,"BankBranchId": br.data.BranchId}));  
+
+              })
+              
+              //set producer value
+              for(var i=0; i< producerNames.length; i++)
+              {
+                if(producerNames[i].value === res.data.EmpKey)
+                {
+                  setSelectedProducer(producerNames[i]);
+                  console.log(producerNames[i]);
+                }
+              }
+
+              
+
+              //set agent value
+              for(var i=0; i< agentNames.length; i++)
+              {
+                if(agentNames[i].value === res.data.AgentKey)
+                {
+                  setSelectedAgent(agentNames[i]);
+                }
+              }
+              
+              
+            }
+            
+          }
+          
+        ) 
+        .catch(function(error){}
+      ) 
+
+      }
+    }
 
     const [input,setInput] = useState(
       {
@@ -139,12 +221,13 @@ export default function MarineCargoCoverNoteNew() {
         Num_Field_14: 0,
         Num_Field_15: 0,
 
+        LockData: true,
+
 
 
       }
     );
-    const [selectedClient,setClient] = useState(null);
-    
+        
     
     const handleInput=(e)=>{
       console.log(e);
@@ -160,25 +243,41 @@ export default function MarineCargoCoverNoteNew() {
         
     }
 
+    const handleSearchInput=(e)=>{      
+      
+      setSearchObj( prevState=>({...prevState,[e.target.name]: e.target.value}))       
+        
+    }
+
     const handleAgent = (e)=>{
       setInput( prevState=>({...prevState,'AgentKey': e.value}));
+      setSelectedAgent({
+        "value": e.value,
+        "label": e.label,
+      })
     }
 
     const handleEmployee = (e)=>{      
       setInput( prevState=>({...prevState,'EmpKey': e.value}));
+      setSelectedProducer({
+        "value": e.value,
+        "label": e.label,
+      })
     }
 
     const handleCurrencyChange=(e)=>{
       
       var curRate = 0;
+      var CurName = '';
       for(var i=0;i<currencies.length; i++)
       {
         
 
         if(currencies[i].CurrencyKey == e.target.value)
-        {          
+        { 
+          CurName = currencies[i].CurrencyName;
           curRate = currencies[i].BankRate;
-          //setInput( prevState=>({...prevState,'CurrencyName': currencies[i].CurrencyName}));
+          
 
           //setInput( prevState=>({...prevState,'CurrencyName': 'US$'}));
           console.log(e.target);
@@ -186,6 +285,7 @@ export default function MarineCargoCoverNoteNew() {
         
       }
       
+      setInput( prevState=>({...prevState,'CurrencyName': CurName}));
       setInput( prevState=>({...prevState,'Num_Field_4': curRate}));
       calculateTotalAmount();
     }
@@ -229,7 +329,13 @@ export default function MarineCargoCoverNoteNew() {
 
     //for react select async
     const [inputValue, setValue] = useState('');
-    const [selectedValue, setSelectedValue] = useState(null);
+    const [selectedClient, setSelectedClient] = useState(null);
+    const [selectedAgent, setSelectedAgent] = useState(null);
+    const [selectedProducer, setSelectedProducer] = useState(null);
+    const [selectedBank, setSelectedBank] = useState(null);
+    const [selectedBankBranch, setSelectedBankBranch] = useState(null);
+    
+
 
     //tariff 
     const [cargoTariff, setCargoTariff] = useState({
@@ -439,78 +545,166 @@ export default function MarineCargoCoverNoteNew() {
   // handle selection
   const handleChange = e => {
     setInput( prevState=>({...prevState,"ClientKey": e.value}))
-    setSelectedValue(e.ClientKey);
+    setSelectedClient(e);
     setclientaddress(e.address);
-    console.log(input);
+    console.log(e);
     
     
   }
+
+  const notify = () => toast("Wow so easy!");
+
+  const showToast=(msg)=>{    
+
+    toast.error(msg, {
+      position: toast.POSITION.TOP_LEFT,
+      autoClose: false,
+    });
+
+  }
+
+  const validateData = ()=>{
+    var isValidate = true;
+    toast.dismiss();
+    if(input.ClientKey === 0)
+    {
+      showToast("Select Client.");
+      isValidate = false;
+    }
+    else if(input.BankKey === 0)
+    {
+      showToast("Select Bank and Branch.");
+
+      isValidate = false;
+    }
+    else if(input.Num_Field_1 === 0)
+    {
+      showToast("Input Foreign Currency.");
+      isValidate = false;
+    }
+    else if(input.CurrencyName === 'Select' || input.CurrencyName === '' )
+    {
+      showToast("Select a Currency.");
+      isValidate = false;
+    }
+    else if(input.Num_Field_4 === 0)
+    {
+      showToast("Currency rate is not given");
+      isValidate = false;
+    }
+    else if(input.Text_Field_5 ==='')
+    {
+      showToast("Interest covered is empty.");
+      isValidate = false;
+
+    }
+    else if(input.Text_Field_6 === '')
+    {
+      showToast("Risks is empty.");
+      isValidate = false;
+    }
+    else if(input.Num_Field_7 === 0 || input.Num_Field_7 === '')
+    {
+      showToast("Select a tariff.");
+      isValidate = false;
+    }
+    else if(input.CoIns === true && input.CoInsPer === 0)
+    {
+      showToast("Insert Co-Insurance percentage.");
+      isValidate = false;
+    }
+    else if(input.CoIns === true & input.We_Leader === false && input.ComKeyCoIns ===0)
+    {
+      showToast("Select leader");
+      isValidate = false;
+    }
+    else if(input.CoIns === true & input.We_Leader === false && input.LeaderDocNo === '')
+    {
+      showToast("Input Leader document No");
+      isValidate = false;
+    }
+    else if(input.Action === 2 && input.LockData === true)
+    {
+      showToast('Document is locked.');
+      isValidate = false;
+    }
+    
+    return isValidate;
+  }
+
 
   const SaveData = (e) =>
-  {
-    if(input.Action===1)
+  { 
+    var returnData = validateData();
+    console.log(input);
+    if(returnData === true)
     {
-      axios.post(`${Constants.BASE_URL}/FinalMR/Create`,input,auth).then(res=>{
-    
-        if(res.status === 200)
-        {          
-          setInput(res.data);
-          setInput( prevState=>({...prevState,'Action': 2}));
+      if(input.Action===1)
+      {
+        axios.post(`${Constants.BASE_URL}/FinalMR/Create`,input,auth).then(res=>{
+      
+          if(res.status === 200)
+          {          
+            setInput(res.data);
+            setInput( prevState=>({...prevState,'Action': 2}));
+            Swal.fire(
+              'Good job!',
+              'Data is saved.',
+              'success'
+            )
+            
+            console.log(res.data);
+            
+          }
+            
+        })
+        .catch(function(error){
           Swal.fire(
-            'Good job!',
-            'Data is saved.',
-            'success'
+            error.response.data,
+            error.message,
+            'error'
           )
-          
-          console.log(res.data);
-          
+
+          //console.log(input);
+          //console.log(error);
         }
-          
-      })
-      .catch(function(error){
-        Swal.fire(
-          error.response.data,
-          error.message,
-          'error'
-        )
+        )    
 
-        console.log(input);
-        console.log(error);
       }
-      )    
-
-    }
-    else if(input.Action===2)
-    {
-      axios.put(`${Constants.BASE_URL}/FinalMR/Update`,input,auth).then(res=>{
-    
-        if(res.status === 200)
-        {          
-          setInput(res.data);
-          setInput( prevState=>({...prevState,'Action': 2}));
+      else if(input.Action===2)
+      {              
+        axios.put(`${Constants.BASE_URL}/FinalMR/Update`,input,auth).then(res=>{
+      
+          if(res.status === 200)
+          {          
+            setInput(res.data);
+            setInput( prevState=>({...prevState,'Action': 2}));
+            Swal.fire(
+              'Data Updated!',
+              'Data is Updated.',
+              'success'
+            )
+            
+          }
+            
+        })
+        .catch(function(error){
           Swal.fire(
-            'Data Updated!',
-            'Data is Updated.',
-            'success'
+            error.response.data,
+            error.message,
+            'error'
           )
-          
+
+          //console.log(input);
+          //console.log(error);
         }
-          
-      })
-      .catch(function(error){
-        Swal.fire(
-          error.response.data,
-          error.message,
-          'error'
-        )
+        )    
 
-        console.log(input);
-        console.log(error);
       }
-      )    
-
     }
   }
+
+  
  
   const loadOptions = (inputValue, callback) => {
     if(inputValue==='')
@@ -561,7 +755,7 @@ export default function MarineCargoCoverNoteNew() {
                     /*make list for react-select */
                     const options = res.data.map(d => ({
                       "value" : d.ClientKey,
-                      "label" : d.ClientName + " | " + d.ClientAddress,
+                      "label" : d.ClientName,
                       "address": d.ClientAddress
                     }))
                     setClientNames(options)                    
@@ -616,8 +810,19 @@ export default function MarineCargoCoverNoteNew() {
     }
 
     const  loadBankBranches=(e)=>{
+
+      var BankId = 0;
+      if(typeof(e) === 'number')
+      {
+        BankId = e;
+      }
+      else
+      {
+        BankId = e.target.value;
+      }
       
-      axios.get(`${Constants.BASE_URL}/BankBranch/BankBranches/${e.target.value}`,auth)
+      
+      axios.get(`${Constants.BASE_URL}/BankBranch/BankBranches/${BankId}`,auth)
             .then(res=>{
                   setBankBranches(res.data);  
                   console.log(res.data);
@@ -625,10 +830,13 @@ export default function MarineCargoCoverNoteNew() {
                   const options = res.data.map(d => ({
                     "value" : d.BranchName,
                     "label" : d.BranchName,
-                    "address": d.BranchAddress
+                    "address": d.BranchAddress,
+                    "BankId": d.BankId,
+                    "BankName": d.BankName,
                   }))
+
                   setBranchNames(options);
-                  console.log(options);
+                  
 
                 }
             )
@@ -828,7 +1036,27 @@ export default function MarineCargoCoverNoteNew() {
           
 
           <div className="card-body">
-        
+            <div className='row border p-2' style={{backgroundColor:'LightGray'}} >
+
+              <div className="col-md-2 my-1">Search CN No</div>
+              <div className="col-md-2 ">
+                <input type="number" className="form-control" id='DocCode' autoComplete="off"
+                      name='DocCode'  
+                      value={searchObj.DocCode}
+                      onChange={handleSearchInput}
+                      placeholder='CN No' />
+              </div>
+            <div className="col-md-2 my-1">Search Year</div>
+            
+            <div className="col-md-2 my-1">
+              <input type="number" className="form-control" id='YearName' autoComplete="off"
+                    name='YearName'  
+                    value={searchObj.YearName}
+                    onChange={handleSearchInput}
+                    onKeyUp={handleSearch}
+                    placeholder='Year' />
+            </div>
+          </div>
           <div className='row gx-2'>
             <div className="col-md-7 py-2" style={{border: "solid 1px", borderRadius:"5px", borderColor:"silver"}} >
             <div className="row "> 
@@ -844,17 +1072,11 @@ export default function MarineCargoCoverNoteNew() {
 
             <div className='col-md-3 my-2'>Client</div>
             <div className='col-md-9 my-1'>
-              {/* <Select  options={clientNames} 
-              id='clientKey'
-              name='clientKey'
-              onChange={handleClientChangte}
-              isMulti={false}
-              /> */}
-              
+                            
                 <AsyncSelect
                   cacheOptions
                   defaultOptions
-                  value={selectedValue}
+                  value={selectedClient}
                   
                   loadOptions={loadOptions}
                   onInputChange={handleInputChange}
@@ -891,7 +1113,7 @@ export default function MarineCargoCoverNoteNew() {
             <div className='col-md-9 my-1'>
               <select className="form-select" aria-label="Group"
               name='BankBranch'
-              value={input.ClientTypeTwo}
+              value={input.BankBranchId}
               onChange={loadBranchAddress}
               >
                 <option key={0} value={0}>Select</option> 
@@ -1120,6 +1342,7 @@ export default function MarineCargoCoverNoteNew() {
               id='EmpKey'
               name='EmpKey'
               onChange={handleEmployee}
+              value={selectedProducer}
               
               isMulti={false}
 
@@ -1134,6 +1357,7 @@ export default function MarineCargoCoverNoteNew() {
               id='AgentKey'
               name='AgentKey'
               onChange={handleAgent}
+              value={selectedAgent}
               isMulti={false}
               />
             </div>
@@ -1652,7 +1876,8 @@ export default function MarineCargoCoverNoteNew() {
               <button type="button" className="btn btn-primary mx-2" ><i className="fa-light fa-floppy-disk"></i> Copy From CN</button> 
               <button type="button" className="btn btn-primary mx-2" ><i className="fa-light fa-floppy-disk"></i> Copy From Bill</button> 
               <button type="button" className="btn btn-secondary mx-2" onClick={calculateTotalAmount} > Cancel</button>              
-              <button type="button" className="btn btn-primary mx-2"><i className="fa-regular fa-file-pdf"></i>PDF</button>
+              <button type="button" className="btn btn-primary mx-2" onClick={showToast}><i className="fa-regular fa-file-pdf"></i>PDF</button>
+              <ToastContainer />
               
             </div>
           </div>
